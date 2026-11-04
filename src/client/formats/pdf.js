@@ -60,20 +60,25 @@ async function loadPdfjs() {
   }
 }
 
-function destinationToPage(doc, destination) {
+export async function destinationToPage(doc, destination) {
   if (destination === null || destination === undefined) return null
   if (typeof destination === 'string') {
-    const resolved = doc.getDestination(destination)
-    if (resolved === null) return null
+    // Named destinations are resolved asynchronously by pdf.js; treating the
+    // promise as an array made every named outline entry unclickable.
+    const resolved = await doc.getDestination(destination)
+    if (resolved === null || resolved === undefined) return null
     return resolved
   }
   return destination
 }
 
-async function pageIndexOfDestination(doc, destination) {
+export async function pageIndexOfDestination(doc, destination) {
   try {
-    const resolved = destinationToPage(doc, destination)
-    if (resolved === null || resolved.length === 0) return null
+    const resolved = await destinationToPage(doc, destination)
+    if (resolved === null || resolved === undefined) return null
+    // A bare number is an explicit zero-based page index.
+    if (typeof resolved === 'number') return resolved + 1
+    if (resolved.length === 0) return null
     const reference = resolved[0]
     if (typeof reference === 'number') return reference + 1
     const index = await doc.getPageIndex(reference)
@@ -91,7 +96,9 @@ function flattenOutline(items, level, output, doc) {
       // A title whose destination cannot be resolved (damaged or unsupported
       // link) is not clickable in a normal viewer; keep walking its children.
       const label = String(item.title ?? '').trim()
-      if (label.length > 0 && (page !== null || externalUrl !== null)) {
+      // Keep entries whose destination could not be resolved: the outline
+      // still shows the document structure and they render as non-clickable.
+      if (label.length > 0) {
         output.push({ label, level, page, externalUrl })
       }
       if (Array.isArray(item.items) && item.items.length > 0) await flattenOutline(item.items, level + 1, output, doc)
