@@ -207,6 +207,11 @@ reports structured diagnostics to `/api/omnireader/diag`, which were read back f
 ```bash
 node build.mjs                       # esbuild bundle → lib/client.js
 node --test "tests/**/*.test.mjs"    # unit tests
+
+# Instrumented build: measures panel containment, pointer hit-testing, overflow,
+# theme contrast and per-format opening inside the live application shell, and
+# reports numbers to the host diagnostics log. Dead code in a regular build.
+OMNIREADER_AUDIT=1 node build.mjs
 ```
 
 The bundle is wrapped in `window.__ModuleLoader__.load({ id, factory })`, so the only

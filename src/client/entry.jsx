@@ -263,6 +263,11 @@ function attachPreview(ctx, t, previews) {
 }
 
 export function apply(ctx) {
+  // A development audit probe from an earlier client generation must stop when
+  // a regular build takes over, otherwise it could still drive the shell.
+  if (typeof __OMNIREADER_AUDIT__ === 'string' && __OMNIREADER_AUDIT__ === '' && globalThis.__omrAuditGen !== undefined) {
+    globalThis.__omrAuditGen += 1
+  }
   ctx.effect(() => ctx.locale.register(NS, 'en', en))
   ctx.effect(() => ctx.locale.register(NS, 'zh', zh))
   const t = ctx.locale.bind(NS)
