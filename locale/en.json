@@ -1,0 +1,14 @@
+{
+  "meta": {
+    "title": "OmniReader",
+    "description": "Local-first multi-format reader: Markdown, PDF, DOCX, EPUB, MOBI/AZW3 with outline, search, progress restore and reading themes."
+  },
+  "viewer": {
+    "label": "OmniReader",
+    "quickPreview": "OmniReader preview"
+  },
+  "action": {
+    "openInReader": "Open in OmniReader",
+    "openInReaderHint": "Read this file in the full OmniReader panel"
+  }
+}

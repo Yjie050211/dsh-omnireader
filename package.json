@@ -1,0 +1,76 @@
+{
+  "name": "dsh-omnireader",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first multi-format document reader for DeepSeek Harness: Markdown, PDF, DOCX, EPUB and MOBI/AZW3 with unified navigation, search, reading progress and themes.",
+  "icon": "icon.svg",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./lib/client.js",
+    "./locale/en.json": "./locale/en.json",
+    "./locale/zh.json": "./locale/zh.json",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "engines": {
+      "dsh": ">=0.2.1-rc.5"
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-sidebar-documentpreview"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.12",
+    "pdfjs-dist": "^4.10.38"
+  },
+  "files": [
+    "index.js",
+    "lib/client.js",
+    "lib/*.js",
+    "src/**/*.js",
+    "src/**/*.jsx",
+    "cordis.patch.yml",
+    "icon.svg",
+    "locale/*.json",
+    "README.md",
+    "README.zh.md",
+    "LICENSE",
+    "build.mjs",
+    "tests/**/*.mjs",
+    "tests/fixtures/**/*",
+    "lib/pdf.worker.min.mjs"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test \"tests/**/*.test.mjs\""
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yjie050211/dsh-omnireader.git"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "cordis",
+    "reader",
+    "epub",
+    "mobi",
+    "docx",
+    "pdf",
+    "markdown"
+  ]
+}

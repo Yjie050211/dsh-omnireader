@@ -1,0 +1,14 @@
+{
+  "meta": {
+    "title": "OmniReader 全能阅读器",
+    "description": "本地优先的多格式阅读器：Markdown、PDF、DOCX、EPUB、MOBI/AZW3，支持目录、搜索、进度恢复与阅读主题。"
+  },
+  "viewer": {
+    "label": "OmniReader",
+    "quickPreview": "OmniReader 预览"
+  },
+  "action": {
+    "openInReader": "在 OmniReader 中打开",
+    "openInReaderHint": "在完整的 OmniReader 面板中阅读此文件"
+  }
+}

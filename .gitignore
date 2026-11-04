@@ -1,0 +1,13 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build intermediates
+src/client/generated/
+.tmp-*/
+*.log
+
+# OS noise
+.DS_Store
+Thumbs.db
+desktop.ini

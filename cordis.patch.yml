@@ -1,0 +1,8 @@
+# dsh-omnireader bundle patch: inserts the dual-face OmniReader plugin row.
+# The node half (exports ".") runs in the Harness host process to serve the
+# authenticated local file/state/diagnostics routes; the `dsh.client`
+# declaration in package.json makes the browser half (exports "./client",
+# served at /plugins/dsh-omnireader/client.js) mount the reader UI.
+- insert:
+    - id: omnireader
+      name: dsh-omnireader
