@@ -12,38 +12,51 @@
  *
  * Everything is bundled by build.mjs from src/client; the bundle is loaded as
  * `window.__ModuleLoader__.load({ id: 'dsh-omnireader', factory })`.
+ *
+ * Boot order matters: this client half is loaded with `immediately: true`,
+ * which can be earlier than the plugins that provide `documentPreviews` and
+ * `layout`. Nothing here may assume those services exist at apply time: the
+ * preview registry is acquired by a short bounded poll, and the layout service
+ * is resolved lazily through `ctx.get()` at click time.
  */
 import React, { useEffect, useRef, useState } from 'react'
 import { NS, en, zh } from './dict.js'
 import { CSS } from './ui/styles.js'
 import { ReaderPanel } from './ui/ReaderPanel.jsx'
 import { FlowView } from './ui/FlowView.jsx'
+import { installAudit } from './ui/audit.js'
 import { openDocument } from './formats/index.js'
 import { basename } from './lib/util.js'
 import { readerStore } from './lib/store.js'
-import { apiGet, fetchDocumentBytes, report } from './lib/http.js'
+import { report } from './lib/http.js'
 
 const PANEL_ID = 'omnireader'
 const PREVIEW_ID = 'omnireader-preview'
 const ACTION_ID = 'omnireader.open'
 /** Ebook containers the built-in preview cannot render on its own. */
 const PREVIEW_EXTENSIONS = ['epub', 'mobi', 'azw', 'azw3', 'kf8', 'prc']
+/** Panel id used by the harness shell for the conversation surface. */
+const CONVERSATION_PANEL_ID = 'conversation'
+/** How long to wait for the document preview registry to appear. */
+const PREVIEW_WAIT_MS = 20000
+const PREVIEW_POLL_MS = 250
 
 const ACTION_CSS = `
 .omr-open-action {
   display: inline-flex; align-items: center; gap: 4px;
   height: 24px; padding: 0 8px; border-radius: 6px;
-  border: 1px solid var(--dsw-alias-border-l2, rgba(0,0,0,.14));
-  background: var(--dsw-alias-bg-layer-2, rgba(0,0,0,.04));
+  border: 1px solid var(--dsw-alias-border-l2, rgba(127,127,127,.35));
+  background: var(--dsw-alias-bg-layer-2, rgba(127,127,127,.10));
   color: var(--dsw-alias-label-primary, inherit);
   font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap;
 }
-.omr-open-action:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(0,0,0,.07)); }
-.omr-open-action:focus-visible { outline: 2px solid var(--dsw-alias-state-focus-ring, #4d8bff); outline-offset: 1px; }
+.omr-open-action:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,.14)); }
+.omr-open-action:active { background: var(--dsw-alias-bg-layer-3, rgba(127,127,127,.18)); }
+.omr-open-action:focus-visible { outline: 2px solid var(--dsw-alias-label-secondary, currentColor); outline-offset: 1px; }
 .omr-open-action:disabled { opacity: .55; cursor: default; }
 `
 
-/** Services captured at apply time; the preview action needs `layout`. */
+/** Services captured at apply time; read through getters, never cached. */
 let services = null
 
 /** Sidebar glyph: the shell owns the button, this draws the book mark. */
@@ -169,7 +182,12 @@ function OpenInReaderAction({ absolutePath, t }) {
     try {
       await readerStore.init().catch(() => {})
       await readerStore.openPath(target)
-      services?.layout?.selectPanel?.(PANEL_ID)
+      const layout = services?.layout
+      if (layout !== undefined && layout !== null && typeof layout.selectPanel === 'function') {
+        layout.selectPanel(PANEL_ID)
+      } else {
+        report('layout-unavailable', { where: 'open-in-reader' })
+      }
       report('preview-open-in-reader', { path: target })
     } catch (error) {
       report('preview-open-in-reader-failed', { path: target, message: String(error?.message ?? error) })
@@ -193,22 +211,70 @@ function OpenInReaderAction({ absolutePath, t }) {
   )
 }
 
+/** Leaves the reader for the conversation surface; never traps the user. */
+function leavePanel() {
+  const layout = services?.layout
+  if (layout !== undefined && layout !== null && typeof layout.selectPanel === 'function') {
+    layout.selectPanel(CONVERSATION_PANEL_ID)
+    report('panel-leave', { target: CONVERSATION_PANEL_ID })
+    return
+  }
+  report('layout-unavailable', { where: 'leave' })
+}
+
 /** Panel body: supplies locale-bound copy whether or not the slot binds `t`. */
-
-
 function ReaderPanelEntry(props) {
   const bound = typeof props?.t === 'function' ? props.t : services?.t
   const translate = typeof bound === 'function' ? bound : (key) => key
-  return <ReaderPanel t={translate} />
+  return <ReaderPanel t={translate} onLeave={leavePanel} />
 }
 
+/**
+ * Registers the ebook preview definition and its body once the registry is
+ * available. Returns one disposer for both registrations.
+ */
+function attachPreview(ctx, t, previews) {
+  const disposers = []
+  disposers.push(
+    previews.register({
+      id: PREVIEW_ID,
+      extensions: PREVIEW_EXTENSIONS,
+      binaryExtensions: PREVIEW_EXTENSIONS,
+      title: () => t('viewer.label'),
+      loading: 'bytes-complete',
+      wrap: false,
+    }),
+  )
+  disposers.push(
+    ctx.slots.inject('sidebar.right.tab.document', () =>
+      ctx.slots.register({ name: 'sidebar.right.tab.document', key: PREVIEW_ID, locale: NS }, QuickPreviewBody),
+    ),
+  )
+  report('preview-registered', { id: PREVIEW_ID })
+  return () => {
+    for (const dispose of disposers.reverse()) {
+      try {
+        dispose?.()
+      } catch {
+        // A failed teardown must not break plugin unload.
+      }
+    }
+  }
+}
 
-export function apply(ctx) {  ctx.effect(() => ctx.locale.register(NS, 'en', en))
+export function apply(ctx) {
+  ctx.effect(() => ctx.locale.register(NS, 'en', en))
   ctx.effect(() => ctx.locale.register(NS, 'zh', zh))
   const t = ctx.locale.bind(NS)
-  const layout = ctx.get('layout')
-  const previews = ctx.get('documentPreviews')
-  services = { layout, previews, t }
+  services = {
+    get layout() {
+      return ctx.get('layout')
+    },
+    get previews() {
+      return ctx.get('documentPreviews')
+    },
+    t,
+  }
   ctx.effect(() => () => {
     services = null
   })
@@ -216,32 +282,41 @@ export function apply(ctx) {  ctx.effect(() => ctx.locale.register(NS, 'en', en)
   report('apply', {
     hasSlots: typeof ctx.slots?.register === 'function',
     hasLocale: typeof ctx.locale?.register === 'function',
-    hasLayout: layout !== undefined && layout !== null,
-    hasPreviews: previews !== undefined && previews !== null,
+    hasLayout: ctx.get('layout') !== undefined && ctx.get('layout') !== null,
+    hasPreviews: ctx.get('documentPreviews') !== undefined && ctx.get('documentPreviews') !== null,
     previewExtensions: PREVIEW_EXTENSIONS,
   })
 
-  // Quick preview renderers for ebook containers.
-  if (previews !== undefined && previews !== null && typeof previews.register === 'function') {
-    ctx.effect(() =>
-      previews.register({
-        id: PREVIEW_ID,
-        extensions: PREVIEW_EXTENSIONS,
-        binaryExtensions: PREVIEW_EXTENSIONS,
-        title: () => t('viewer.label'),
-        loading: 'bytes-complete',
-        wrap: false,
-      }),
-    )
-    ctx.effect(() =>
-      ctx.slots.inject('sidebar.right.tab.document', () =>
-        ctx.slots.register({ name: 'sidebar.right.tab.document', key: PREVIEW_ID, locale: NS }, QuickPreviewBody),
-      ),
-    )
-    report('preview-registered', { id: PREVIEW_ID })
-  } else {
-    report('preview-registry-missing', {})
-  }
+  // Quick preview renderers for ebook containers. At boot the registry plugin
+  // may not have run yet, so poll briefly instead of silently giving up.
+  ctx.effect(() => {
+    let dispose = null
+    let timer = null
+    let waited = 0
+    const tick = () => {
+      if (dispose !== null) return
+      const previews = ctx.get('documentPreviews')
+      if (previews !== undefined && previews !== null && typeof previews.register === 'function') {
+        try {
+          dispose = attachPreview(ctx, t, previews)
+        } catch (error) {
+          report('preview-register-failed', { message: String(error?.message ?? error) })
+        }
+        return
+      }
+      waited += PREVIEW_POLL_MS
+      if (waited >= PREVIEW_WAIT_MS) {
+        report('preview-registry-missing', { waited })
+        return
+      }
+      timer = setTimeout(tick, PREVIEW_POLL_MS)
+    }
+    tick()
+    return () => {
+      if (timer !== null) clearTimeout(timer)
+      if (dispose !== null) dispose()
+    }
+  })
 
   // Bridge from the built-in preview to the immersive reader.
   ctx.effect(() =>
@@ -260,6 +335,10 @@ export function apply(ctx) {  ctx.effect(() => ctx.locale.register(NS, 'en', en)
     ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANEL_ID, locale: NS }, ReaderPanelEntry)),
   )
 
+  // Only present in `OMNIREADER_AUDIT=1` builds; normal builds strip this branch.
+  if (typeof __OMNIREADER_AUDIT__ === 'string' && __OMNIREADER_AUDIT__ !== '') {
+    ctx.effect(() => installAudit(ctx, __OMNIREADER_AUDIT__))
+  }
 }
 
 export const inject = ['slots', 'locale']
