@@ -1,0 +1,58 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 7 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 193 >>
+stream
+BT
+/F1 18 Tf
+72 760 Td
+26 TL
+(OmniReader PDF fixture) Tj T*
+(Page one of two. The quick brown fox jumps over the lazy dog.) Tj T*
+(Search for omnireader and expect hits on both pages.) Tj T*
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 7 0 R >> >> /Contents 6 0 R >>
+endobj
+6 0 obj
+<< /Length 176 >>
+stream
+BT
+/F1 18 Tf
+72 760 Td
+26 TL
+(Page two of two.) Tj T*
+(This page exists so page navigation and progress can be tested.) Tj T*
+(The word omnireader appears again here.) Tj T*
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000127 00000 n 
+0000000253 00000 n 
+0000000497 00000 n 
+0000000623 00000 n 
+0000000850 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+920
+%%EOF
