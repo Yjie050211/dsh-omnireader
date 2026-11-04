@@ -594,7 +594,20 @@ export function apply(ctx, config = {}) {
     handler,
   }))
 
-  const disposers = routes.map((route) => ctx.webServer.register(route))
+  // Register each route as a fiber-owned effect: Cordis disposes it when the
+  // plugin fiber stops (a value returned from apply() is NOT a cleanup hook).
+  // A duplicate registration can only mean a route left behind by an earlier
+  // generation of this plugin in the same host process; keep that handler and
+  // report it instead of failing activation.
+  for (const route of routes) {
+    try {
+      ctx.effect(() => ctx.webServer.register(route))
+    } catch (error) {
+      ctx.logger?.warn?.(
+        `[omnireader] route ${route.path} is already mounted: ${error?.message ?? error}`,
+      )
+    }
+  }
 
   // Best-effort startup diagnostics so the host log records the mounted data
   // directory and limits; this never contains document content.
@@ -602,9 +615,6 @@ export function apply(ctx, config = {}) {
     `[omnireader] host routes mounted at ${API_PREFIX} (data: ${dataDir}, maxFileBytes: ${DEFAULT_MAX_FILE_BYTES})`,
   )
 
-  return () => {
-    for (const dispose of disposers.splice(0)) dispose()
-  }
 }
 
 export default { name, inject, apply }
