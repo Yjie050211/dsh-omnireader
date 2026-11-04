@@ -554,6 +554,27 @@ function resolveDshHome() {
 }
 
 /**
+ * Process-wide route bookkeeping shared across generations of this Host half.
+ *
+ * @returns {{ routes: Array<() => void> }}
+ */
+function getHostState() {
+  const key = Symbol.for('dsh-omnireader.host-state')
+  const current = globalThis[key]
+  if (current !== null && current !== undefined && Array.isArray(current.routes)) {
+    return current
+  }
+  const state = { routes: [] }
+  Object.defineProperty(globalThis, key, {
+    value: state,
+    configurable: true,
+    enumerable: false,
+    writable: false,
+  })
+  return state
+}
+
+/**
  * Activate the host half: mount the route table and leak nothing outside the
  * returned disposer.
  *
@@ -594,19 +615,43 @@ export function apply(ctx, config = {}) {
     handler,
   }))
 
-  // Register each route as a fiber-owned effect: Cordis disposes it when the
-  // plugin fiber stops (a value returned from apply() is NOT a cleanup hook).
-  // A duplicate registration can only mean a route left behind by an earlier
-  // generation of this plugin in the same host process; keep that handler and
-  // report it instead of failing activation.
-  for (const route of routes) {
+  // Route lifecycle. Routes are owned by a process-wide registry, not only by
+  // this fiber: the Host half can be re-activated in the same process (disable
+  // then enable) while a previous generation still holds its exact routes, and
+  // `webServer.register` rejects duplicates. Disposing the previous generation
+  // first keeps re-activation idempotent instead of leaving stale handlers
+  // mounted. The registry hangs off globalThis so it also survives a module
+  // re-import of this file.
+  const hostState = getHostState()
+  for (const dispose of hostState.routes.splice(0)) {
     try {
-      ctx.effect(() => ctx.webServer.register(route))
+      dispose()
     } catch (error) {
-      ctx.logger?.warn?.(
-        `[omnireader] route ${route.path} is already mounted: ${error?.message ?? error}`,
-      )
+      ctx.logger?.warn?.(`[omnireader] stale route cleanup failed: ${error?.message ?? error}`)
     }
+  }
+  for (const route of routes) {
+    let dispose = null
+    try {
+      dispose = ctx.webServer.register(route)
+    } catch (error) {
+      ctx.logger?.warn?.(`[omnireader] route ${route.path} could not be mounted: ${error?.message ?? error}`)
+      continue
+    }
+    hostState.routes.push(dispose)
+    let released = false
+    const release = () => {
+      if (released) return
+      released = true
+      const index = hostState.routes.indexOf(dispose)
+      if (index !== -1) hostState.routes.splice(index, 1)
+      try {
+        dispose()
+      } catch {
+        // The route is already gone; nothing left to release.
+      }
+    }
+    ctx.effect(() => release)
   }
 
   // Best-effort startup diagnostics so the host log records the mounted data

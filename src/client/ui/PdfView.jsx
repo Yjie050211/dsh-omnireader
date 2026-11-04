@@ -107,6 +107,11 @@ export function PdfView({ model, tab, t, jump, onLocation, quick = false }) {
   const baseSize = useRef(null)
   const frame = useRef(0)
   const lastReported = useRef({ page: 0, at: 0 })
+  // Same trick as FlowView: the location updates while scrolling, but the
+  // restore pass must only run on mount / tab switch.
+  const tabRef = useRef(tab)
+  tabRef.current = tab
+  const restoredRef = useRef(null)
   const location = tab?.location ?? {}
   const rotation = Number(location.rotation) || 0
   const requestedScale = Number(location.scale) || 0
@@ -173,6 +178,40 @@ export function PdfView({ model, tab, t, jump, onLocation, quick = false }) {
     const page = Math.min(Math.max(Number(jump.page) || 1, 1), model.numPages)
     scrollToPage(page)
   }, [jump?.seq, model.numPages, scrollToPage])
+
+  // Restore the saved page after a reopen or a tab switch. Pages are laid out
+  // synchronously as placeholders, so this can retry a few frames until the
+  // scroll port has a real height.
+  useEffect(() => {
+    if (quick) return undefined
+    const tabId = tabRef.current?.id ?? 'detached'
+    const restoreKey = `${tabId}:${model?.path ?? model?.title ?? 'model'}`
+    if (restoredRef.current === restoreKey) return undefined
+    restoredRef.current = restoreKey
+    const page = Math.min(Math.max(Number(tabRef.current?.location?.page) || 1, 1), model.numPages)
+    if (page <= 1) return undefined
+    let cancelled = false
+    let tries = 0
+    let handle = 0
+    const tick = () => {
+      if (cancelled) return
+      const container = containerRef.current
+      const node = pageRefs.current.get(page)
+      if (container !== null && node !== undefined && container.scrollHeight > 0) {
+        node.scrollIntoView({ block: 'start' })
+        report('position-restored', { kind: 'pdf', page, applied: true })
+        return
+      }
+      tries += 1
+      if (tries < 48) handle = window.requestAnimationFrame(tick)
+      else report('position-restored', { kind: 'pdf', page, applied: false })
+    }
+    handle = window.requestAnimationFrame(tick)
+    return () => {
+      cancelled = true
+      window.cancelAnimationFrame(handle)
+    }
+  }, [quick, tab?.id, model, model.numPages, scrollToPage])
 
   const handleScroll = useCallback(() => {
     if (frame.current !== 0) return

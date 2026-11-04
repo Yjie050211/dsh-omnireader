@@ -97,8 +97,16 @@ const result = await build({
     'process.env.NODE_ENV': '"production"',
     // Dead-code gated UI audit: `OMNIREADER_AUDIT=1 node build.mjs` produces a
     // bundle that measures the real mounted panel and reports through the host
-    // diagnostics route. Normal builds strip the branch.
-    __OMNIREADER_AUDIT__: JSON.stringify(process.env.OMNIREADER_AUDIT === '1' ? 'audit-' + Date.now() : ''),
+    // diagnostics route; `OMNIREADER_AUDIT=func` runs only the functional
+    // probes (restore, tabs, jump, quick preview) for a shorter run. Normal
+    // builds strip the branch.
+    __OMNIREADER_AUDIT__: JSON.stringify(
+      process.env.OMNIREADER_AUDIT === '1'
+        ? 'audit-' + Date.now()
+        : process.env.OMNIREADER_AUDIT === 'func'
+          ? 'func-' + Date.now()
+          : '',
+    ),
   },
   loader: {
     '.woff': 'binary',

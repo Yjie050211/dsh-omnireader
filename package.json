@@ -34,7 +34,10 @@
   },
   "devDependencies": {
     "esbuild": "^0.25.12",
-    "pdfjs-dist": "^4.10.38"
+    "jsdom": "25.0.1",
+    "pdfjs-dist": "^4.10.38",
+    "react": "^18.3.1",
+    "react-dom": "18.3.1"
   },
   "files": [
     "index.js",

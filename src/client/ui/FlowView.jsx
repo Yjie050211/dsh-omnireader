@@ -213,6 +213,11 @@ export function FlowView({ model, tab, t, jump, onLocation, onLink, onOpenExtern
   const chapterRefs = useRef(new Map())
   const lastReported = useRef({ chapter: -1, block: -1, at: 0 })
   const frame = useRef(0)
+  // Read the current location through a ref: scroll updates must not retrigger
+  // the restore pass, but a remount (tab switch, reopen) must.
+  const tabRef = useRef(tab)
+  tabRef.current = tab
+  const restoredRef = useRef(null)
 
   const setChapterRef = useCallback((index, node) => {
     if (node === null) chapterRefs.current.delete(index)
@@ -258,6 +263,51 @@ export function FlowView({ model, tab, t, jump, onLocation, onLink, onOpenExtern
     const timer = window.setTimeout(() => setHighlight(null), 2600)
     return () => window.clearTimeout(timer)
   }, [jump?.seq, chapters.length, scrollToChapter])
+
+  // Restore the saved reading position when the view mounts or is remounted
+  // (reopening a document, switching between tabs). The jump effect above is
+  // for explicit navigation and paints a highlight; this one is silent.
+  useEffect(() => {
+    if (quick) return undefined
+    const tabId = tabRef.current?.id ?? 'detached'
+    const restoreKey = `${tabId}:${model?.path ?? model?.title ?? 'model'}`
+    if (restoredRef.current === restoreKey) return undefined
+    const saved = tabRef.current?.location
+    const chapter = clamp(Number(saved?.chapter) || 0, 0, Math.max(chapters.length - 1, 0))
+    const block = Number(saved?.block)
+    const hasBlock = Number.isFinite(block) && block > 0
+    if (chapter === 0 && !hasBlock) {
+      restoredRef.current = restoreKey
+      return undefined
+    }
+    restoredRef.current = restoreKey
+    setVisible((current) => {
+      if (chapter >= current.start && chapter < current.end - 1) return current
+      return windowAround(chapters, chapter)
+    })
+    setActiveChapter(chapter)
+    let cancelled = false
+    const timer = window.setTimeout(() => {
+      if (cancelled) return
+      const container = containerRef.current
+      const selector = hasBlock
+        ? `[data-chapter="${chapter}"] [data-block="${block}"]`
+        : `[data-chapter="${chapter}"]`
+      const node = container === null ? null : container.querySelector(selector)
+      const target = node ?? chapterRefs.current.get(chapter) ?? null
+      if (target !== null) target.scrollIntoView({ block: 'start' })
+      report('position-restored', {
+        kind: 'flow',
+        chapter,
+        block: hasBlock ? block : null,
+        applied: target !== null,
+      })
+    }, 32)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [quick, tab?.id, chapters.length, model, scrollToChapter])
 
   // Track the reading position while scrolling and extend the window near the end.
   const handleScroll = useCallback(() => {

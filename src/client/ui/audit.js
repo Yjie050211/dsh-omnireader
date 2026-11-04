@@ -468,6 +468,126 @@ function measureReader() {
   }
 }
 
+/**
+ * Functional probes: restore-on-reopen, tab switching, in-document search and
+ * the quick-preview registration. Runs inside the real reader surface and
+ * returns a compact JSON snapshot for the diagnostics log.
+ */
+async function auditFunctionality(ctx, alive) {
+  const out = {}
+  const scrollTop = (selector) => {
+    const node = document.querySelector(selector)
+    return node === null ? null : Math.round(node.scrollTop)
+  }
+  try {
+    // 1. Flow restore: save a mid-book position, close, reopen.
+    const mdPath = READER_FIXTURE
+    const first = await readerStore.openPath(mdPath)
+    await sleep(900)
+    const model = readerStore.getTab(first.id)?.model
+    const chapter = Math.min(3, Math.max((model?.chapters?.length ?? 1) - 1, 0))
+    readerStore.setLocation(first.id, { chapter, block: 3 })
+    await sleep(150)
+    readerStore.closeTab(first.id)
+    await sleep(250)
+    const reopened = await readerStore.openPath(mdPath)
+    await sleep(1100)
+    if (!alive()) return out
+    const tab = readerStore.getTab(reopened.id) ?? reopened
+    out.flowRestore = {
+      status: tab.status,
+      savedLocation: { chapter, block: 3 },
+      location: tab.location,
+      scrollTop: scrollTop('.omr-root .omr-scroll'),
+      chapters: tab.model?.chapters?.length ?? null,
+      outline: tab.model?.outline?.length ?? null,
+      searchIndex: tab.model?.searchIndex?.length ?? null,
+    }
+    // 2. Jump requests from the outline must be consumed exactly once.
+    const outline = tab.model?.outline ?? []
+    const target = outline.length > 1 ? outline[outline.length - 2] : outline[0] ?? null
+    if (target !== null && target !== undefined) {
+      const before = scrollTop('.omr-root .omr-scroll')
+      readerStore.requestJump(tab.id, { chapter: target.chapter, block: target.block ?? 0 })
+      await sleep(900)
+      out.jump = {
+        target: { chapter: target.chapter, block: target.block ?? 0 },
+        pendingConsumed: readerStore.getTab(tab.id)?.pendingLocation === null,
+        scrollBefore: before,
+        scrollAfter: scrollTop('.omr-root .omr-scroll'),
+      }
+    }
+    // 3. Switching tabs must keep each tab's own reading position.
+    const pdfFixture = FORMAT_FIXTURES.find((fixture) => fixture.name.endsWith('.pdf'))
+    if (pdfFixture !== undefined) {
+      const pdfTab = await readerStore.openPath(pdfFixture.path)
+      await sleep(1600)
+      if (!alive()) return out
+      const mdScroll = scrollTop('.omr-root .omr-scroll')
+      readerStore.activateTab(tab.id)
+      await sleep(900)
+      const back = scrollTop('.omr-root .omr-scroll')
+      readerStore.activateTab(pdfTab.id)
+      await sleep(900)
+      out.tabs = {
+        active: readerStore.getActiveTab()?.format ?? null,
+        mdScroll,
+        mdScrollAfterSwitchBack: back,
+      }
+    }
+  } catch (error) {
+    out.error = String(error?.message ?? error)
+  }
+  try {
+    // 4. PDF restore to a saved page.
+    const pdfFixture = FORMAT_FIXTURES.find((fixture) => fixture.name.endsWith('.pdf'))
+    if (pdfFixture !== undefined) {
+      for (const openTab of [...readerStore.getSnapshot().tabs]) readerStore.closeTab(openTab.id)
+      await sleep(250)
+      const tab = await readerStore.openPath(pdfFixture.path)
+      await sleep(1500)
+      readerStore.setLocation(tab.id, { page: 2, scale: 0, rotation: 0 })
+      await sleep(150)
+      readerStore.closeTab(tab.id)
+      await sleep(250)
+      const reopened = await readerStore.openPath(pdfFixture.path)
+      await sleep(1800)
+      if (!alive()) return out
+      const current = readerStore.getTab(reopened.id) ?? reopened
+      out.pdfRestore = {
+        status: current.status,
+        pages: current.model?.numPages ?? null,
+        location: current.location,
+        scrollTop: scrollTop('.omr-root .omr-pdf-scroll'),
+      }
+    }
+  } catch (error) {
+    out.pdfError = String(error?.message ?? error)
+  }
+  try {
+    // 5. Quick preview: the ebook renderer must be part of the registry.
+    const previews = ctx.get('documentPreviews')
+    const snapshot = previews?.getSnapshot?.() ?? null
+    const definitions = Array.isArray(snapshot)
+      ? snapshot
+      : snapshot?.definitions ?? snapshot?.entries ?? []
+    out.quickPreview = {
+      service: previews !== null && previews !== undefined,
+      total: definitions.length,
+      ebooks: definitions
+        .filter((definition) =>
+          (definition?.extensions ?? []).some((extension) =>
+            ['epub', 'mobi', 'azw', 'azw3', 'kf8', 'prc'].includes(String(extension).toLowerCase()),
+          ),
+        )
+        .map((definition) => ({ id: definition.id, loading: definition.loading ?? null })),
+    }
+  } catch (error) {
+    out.quickPreview = { error: String(error?.message ?? error) }
+  }
+  return out
+}
+
 export function installAudit(ctx, token) {
   if (typeof token !== 'string' || token === '') return () => {}
   // One probe run per built generation, per page session. A plugin reload must
@@ -486,6 +606,33 @@ export function installAudit(ctx, token) {
 
   ;(async () => {
     try {
+      // Functional-only mode: short run used to verify reading behaviours
+      // (position restore, tab switching, jumps, quick preview) without the
+      // long measurement sweep, which is more sensitive to renderer throttling.
+      if (token.startsWith('func-')) {
+        const layout = await waitForService(ctx, 'layout')
+        if (layout !== null) {
+          try {
+            layout.selectPanel?.(PANEL_ID)
+          } catch {
+            // The panel may already be selected; the probes work either way.
+          }
+        }
+        await readerStore.init().catch(() => {})
+        await sleep(1000)
+        if (!alive()) return
+        const functionality = await auditFunctionality(ctx, alive)
+        if (!alive()) return
+        send('audit-func', functionality)
+        try {
+          layout?.selectPanel?.('conversation')
+        } catch {
+          // Restoring the conversation panel is cosmetic.
+        }
+        if (globalThis.__omrAuditGen === gen) globalThis.__omrAuditArmed = false
+        send('audit-done', { ok: true, mode: 'func' })
+        return
+      }
       // The probe runs inside the real application shell. Normalise the shell
       // theme first so measurements are comparable across runs, and so a
       // crashed earlier probe can never leave the application on a test theme.
@@ -626,6 +773,10 @@ export function installAudit(ctx, token) {
         }
       }
       send('audit-formats', { formats })
+      if (!alive()) return
+      const functionality = await auditFunctionality(ctx, alive)
+      if (!alive()) return
+      send('audit-func', functionality)
       if (!alive()) return
       try {
         layout.selectPanel?.('conversation')

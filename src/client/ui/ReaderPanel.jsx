@@ -483,9 +483,10 @@ export function ReaderPanel({ t, onLeave, onBrowse }) {
             ) : null}
             <main className="omr-viewer">
               {isPdf ? (
-                <PdfView model={model} tab={activeTab} t={t} jump={jump} onLocation={setLocation} />
+                <PdfView key={activeTab.id} model={model} tab={activeTab} t={t} jump={jump} onLocation={setLocation} />
               ) : (
                 <FlowView
+                  key={activeTab.id}
                   model={model}
                   tab={activeTab}
                   t={t}
