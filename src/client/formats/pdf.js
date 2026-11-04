@@ -87,13 +87,13 @@ function flattenOutline(items, level, output, doc) {
   return (async () => {
     for (const item of items) {
       const page = item.dest === undefined ? null : await pageIndexOfDestination(doc, item.dest)
-      const entry = {
-        label: String(item.title ?? '').trim(),
-        level,
-        page,
-        externalUrl: typeof item.url === 'string' ? item.url : null,
+      const externalUrl = typeof item.url === 'string' ? item.url : null
+      // A title whose destination cannot be resolved (damaged or unsupported
+      // link) is not clickable in a normal viewer; keep walking its children.
+      const label = String(item.title ?? '').trim()
+      if (label.length > 0 && (page !== null || externalUrl !== null)) {
+        output.push({ label, level, page, externalUrl })
       }
-      output.push(entry)
       if (Array.isArray(item.items) && item.items.length > 0) await flattenOutline(item.items, level + 1, output, doc)
     }
   })()

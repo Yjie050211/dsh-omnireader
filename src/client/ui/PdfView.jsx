@@ -166,17 +166,39 @@ export function PdfView({ model, tab, t, jump, onLocation, quick = false }) {
     else pageRefs.current.set(pageNumber, node)
   }, [])
 
+  const scrollToken = useRef(0)
   const scrollToPage = useCallback((pageNumber) => {
-    window.requestAnimationFrame(() => {
+    const token = scrollToken.current + 1
+    scrollToken.current = token
+    let attempts = 0
+    let handle = 0
+    const attempt = () => {
+      if (scrollToken.current !== token) return
+      attempts += 1
+      const container = containerRef.current
       const node = pageRefs.current.get(pageNumber)
-      if (node !== undefined) node.scrollIntoView({ block: 'start' })
-    })
+      if (container !== null && node !== undefined && container.scrollHeight > 0) {
+        node.scrollIntoView({ block: 'start' })
+        report('outline-jump', { page: pageNumber, applied: true, attempts })
+        return
+      }
+      if (attempts >= 60) {
+        report('outline-jump', { page: pageNumber, applied: false, attempts })
+        return
+      }
+      handle = window.requestAnimationFrame(attempt)
+    }
+    handle = window.requestAnimationFrame(attempt)
+    return () => {
+      scrollToken.current += 1
+      window.cancelAnimationFrame(handle)
+    }
   }, [])
 
   useEffect(() => {
     if (!jump) return
     const page = Math.min(Math.max(Number(jump.page) || 1, 1), model.numPages)
-    scrollToPage(page)
+    return scrollToPage(page)
   }, [jump?.seq, model.numPages, scrollToPage])
 
   // Restore the saved page after a reopen or a tab switch. Pages are laid out

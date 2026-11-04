@@ -41,21 +41,26 @@ export function Outline({ t, model, tab, location, onJump, onOpenExternal }) {
         {items.map((item, index) => {
           const level = Math.max(1, Math.min(Number(item.level) || 1, 6))
           const active = index === activeIndex
+          const hasPage = typeof item.page === 'number'
+          const hasChapter = typeof item.chapter === 'number'
+          const hasTarget = hasPage || hasChapter || Boolean(item.externalUrl)
           return (
             <button
               key={`outline-${index}`}
               ref={active ? activeRef : null}
               type="button"
-              className="omr-outline-item"
+              className={`omr-outline-item${hasTarget ? '' : ' omr-outline-item--untargeted'}`}
               data-level={level}
               aria-current={active ? 'location' : undefined}
+              aria-disabled={hasTarget ? undefined : true}
               title={item.label}
               onClick={() => {
+                if (!hasTarget) return
                 if (item.externalUrl) {
                   onOpenExternal?.(item.externalUrl)
                   return
                 }
-                if (typeof item.page === 'number') onJump?.({ page: item.page })
+                if (hasPage) onJump?.({ page: item.page })
                 else onJump?.({ chapter: item.chapter, block: item.block ?? 0, anchor: item.anchor })
               }}
             >

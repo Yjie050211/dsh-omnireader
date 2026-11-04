@@ -358,6 +358,19 @@ function listBlock(element, options, budget, depth, ordered) {
 }
 
 function blockFromElement(element, options, budget, depth) {
+  const blocks = blockFromElementInner(element, options, budget, depth)
+  if (blocks.length === 0) return blocks
+  // EPUB/MOBI anchors usually sit on a wrapper (<section id="chapter1">) that
+  // the converter flattens away. Keep the id on the first produced block so
+  // the table of contents can still scroll to the exact section.
+  const ownId = typeof element.getAttribute === 'function' ? element.getAttribute('id') : null
+  if (ownId !== null && ownId !== '' && blocks[0].id === undefined) {
+    blocks[0] = { ...blocks[0], id: ownId }
+  }
+  return blocks
+}
+
+function blockFromElementInner(element, options, budget, depth) {
   const tag = tagNameOf(element)
   if (DROP_TAGS.has(tag)) return []
   if (budget.left <= 0) return []

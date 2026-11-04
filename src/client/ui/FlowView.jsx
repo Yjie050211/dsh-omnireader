@@ -232,22 +232,58 @@ export function FlowView({ model, tab, t, jump, onLocation, onLink, onOpenExtern
     })
   }, [model, chapters.length, quick])
 
-  const scrollToChapter = useCallback(
-    (index, anchor) => {
-      window.requestAnimationFrame(() => {
-        if (anchor) {
-          const node = document.getElementById(String(anchor))
-          if (node !== null) {
-            node.scrollIntoView({ block: 'start' })
-            return
-          }
-        }
-        const node = chapterRefs.current.get(index)
-        if (node !== undefined) node.scrollIntoView({ block: 'start' })
-      })
-    },
-    [],
-  )
+  // A jump often targets a chapter outside the rendered window, so the node
+  // does not exist yet on the first frame. Retry a bounded number of frames
+  // until the slice has been re-rendered and the target can be scrolled to.
+  const scrollToken = useRef(0)
+  const scrollToChapter = useCallback((index, anchor, block) => {
+    const token = scrollToken.current + 1
+    scrollToken.current = token
+    let attempts = 0
+    let handle = 0
+    const attempt = () => {
+      if (scrollToken.current !== token) return
+      attempts += 1
+      const anchorNode =
+        anchor === undefined || anchor === null || anchor === ''
+          ? null
+          : document.getElementById(String(anchor))
+      const blockNode =
+        anchorNode !== null || typeof block !== 'number'
+          ? null
+          : containerRef.current?.querySelector(
+              `[data-chapter="${index}"] [data-block="${block}"]`,
+            ) ?? null
+      const node = anchorNode ?? blockNode ?? chapterRefs.current.get(index) ?? null
+      if (node !== null) {
+        node.scrollIntoView({ block: 'start' })
+        report('outline-jump', {
+          chapter: index,
+          block: typeof block === 'number' ? block : null,
+          anchor: anchor ?? null,
+          applied: true,
+          attempts,
+        })
+        return
+      }
+      if (attempts >= 60) {
+        report('outline-jump', {
+          chapter: index,
+          block: typeof block === 'number' ? block : null,
+          anchor: anchor ?? null,
+          applied: false,
+          attempts,
+        })
+        return
+      }
+      handle = window.requestAnimationFrame(attempt)
+    }
+    handle = window.requestAnimationFrame(attempt)
+    return () => {
+      scrollToken.current += 1
+      window.cancelAnimationFrame(handle)
+    }
+  }, [])
 
   // External navigation requests (outline, search, bookmarks, restore).
   useEffect(() => {
@@ -259,9 +295,16 @@ export function FlowView({ model, tab, t, jump, onLocation, onLink, onOpenExtern
     })
     setActiveChapter(target)
     if (typeof jump.block === 'number') setHighlight({ chapter: target, block: jump.block })
-    scrollToChapter(target, jump.anchor)
+    const cancelScroll = scrollToChapter(
+      target,
+      jump.anchor,
+      typeof jump.block === 'number' ? jump.block : null,
+    )
     const timer = window.setTimeout(() => setHighlight(null), 2600)
-    return () => window.clearTimeout(timer)
+    return () => {
+      window.clearTimeout(timer)
+      if (typeof cancelScroll === 'function') cancelScroll()
+    }
   }, [jump?.seq, chapters.length, scrollToChapter])
 
   // Restore the saved reading position when the view mounts or is remounted

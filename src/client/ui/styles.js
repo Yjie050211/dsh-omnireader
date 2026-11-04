@@ -157,10 +157,16 @@ export const CSS = `.omr-root {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .omr-outline-item:hover { background: var(--omr-hover); color: var(--omr-fg); }
-.omr-outline-item[data-active="true"] { background: var(--omr-layer-3); color: var(--omr-fg); }
+.omr-outline-item[data-active="true"],
+.omr-outline-item[aria-current="location"] { background: var(--omr-layer-3); color: var(--omr-fg); }
 .omr-outline-item[data-level="1"] { padding-left: 20px; }
 .omr-outline-item[data-level="2"] { padding-left: 32px; }
 .omr-outline-item[data-level="3"] { padding-left: 44px; }
+.omr-outline-item--untargeted {
+  color: var(--omr-fg-tertiary);
+  cursor: default;
+}
+.omr-outline-item--untargeted:hover { background: transparent; color: var(--omr-fg-tertiary); }
 .omr-pdf-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 14px; background: var(--omr-layer-2); overscroll-behavior: contain; }
 .omr-pdf-page { position: relative; background: #fff; box-shadow: var(--dsw-elevation-prominent, 0 2px 10px rgba(0,0,0,.18)); }
 .omr-pdf-page canvas { display: block; }
