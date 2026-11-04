@@ -84,6 +84,8 @@ export const en = {
   'reader.pageFailed': 'Page {page} could not be rendered.',
 
   'outline.title': 'Outline',
+  'outline.unreliableTitle': "this link in the PDF's own outline points at the wrong page",
+  'outline.unreliableNotice': "This PDF's embedded outline sends most entries to the same page, so those entries are disabled. Use search to locate a chapter.",
   'outline.empty': 'This document has no table of contents.',
 
   'search.title': 'Search in document',
@@ -206,6 +208,8 @@ export const zh = {
   'reader.pageFailed': '第 {page} 页渲染失败。',
 
   'outline.title': '目录',
+  'outline.unreliableTitle': '此 PDF 内嵌目录的该条目指向了错误页码',
+  'outline.unreliableNotice': '此 PDF 的内嵌目录把大多数条目指向了同一页，这些条目已禁用。请用搜索定位章节。',
   'outline.empty': '此文档没有可用的目录。',
 
   'search.title': '在文档中搜索',

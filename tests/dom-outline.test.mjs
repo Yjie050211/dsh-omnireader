@@ -47,6 +47,7 @@ const pdfModelWithDeadEntry = {
   outline: [
     { label: 'Cover', level: 1, page: 1, externalUrl: null },
     { label: 'Broken destination', level: 1, page: null, externalUrl: null },
+    { label: 'Unreliable target', level: 1, page: 2, externalUrl: null, unreliable: true },
     { label: 'Web site', level: 1, page: null, externalUrl: 'https://example.com/' },
   ],
 }
@@ -126,6 +127,9 @@ test('outline entries dispatch exact jump targets and ignore dead ones', async (
     click(1)
     assert.deepEqual(jumps, [], 'an entry without a destination must not jump anywhere')
     click(2)
+    assert.deepEqual(jumps, [], 'an entry whose outline data is unreliable must not jump anywhere')
+    assert.ok(host.querySelector('.omr-outline-note'), 'an unreliable outline shows a notice')
+    click(3)
     assert.deepEqual(opened, ['https://example.com/'])
   } finally {
     view.unmount()

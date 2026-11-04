@@ -236,6 +236,18 @@ export const CSS = `.omr-root {
 .omr-note__body { font-size: 12px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
 .omr-note textarea { width: 100%; min-height: 64px; resize: vertical; font-size: 12px; line-height: 1.5; padding: 6px 8px; color: var(--omr-fg); background: var(--omr-layer-2); border: 1px solid var(--omr-border-strong); border-radius: var(--omr-radius-sm); outline: none; }
 .omr-note-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.omr-outline-item--unreliable {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.omr-outline-note {
+  margin: 0;
+  padding: 7px 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--omr-fg-secondary);
+  border-bottom: 1px solid var(--omr-border);
+}
 .omr-empty { padding: 18px 12px; text-align: center; color: var(--omr-fg-tertiary); font-size: 12px; line-height: 1.6; }
 .omr-empty--tight { padding: 6px 8px; text-align: left; }
 .omr-empty--error { color: var(--dsw-alias-state-warn-label, #b45309); }

@@ -10,6 +10,7 @@
 
 import { assetUrl, report } from '../lib/http.js'
 import { PDF_WORKER_TEXT } from '../generated/pdf-worker.js'
+import { markUnreliableOutline } from './outline.js'
 
 let pdfjsPromise = null
 let workerObjectUrl = null
@@ -124,6 +125,7 @@ export async function openPdf({ name, bytes, path, signal }) {
   try {
     const rawOutline = await doc.getOutline()
     if (Array.isArray(rawOutline)) await flattenOutline(rawOutline, 0, outline, doc)
+    markUnreliableOutline(outline)
   } catch {
     // A malformed outline must not prevent reading the document.
   }

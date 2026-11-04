@@ -37,11 +37,15 @@ export function Outline({ t, model, tab, location, onJump, onOpenExternal }) {
   return (
     <nav className="omr-aside" aria-label={t('outline.title')}>
       <div className="omr-section-label">{t('outline.title')}</div>
+      {items.some((item) => item.unreliable === true) ? (
+        <p className="omr-outline-note">{t('outline.unreliableNotice')}</p>
+      ) : null}
       <div className="omr-outline">
         {items.map((item, index) => {
           const level = Math.max(1, Math.min(Number(item.level) || 1, 6))
           const active = index === activeIndex
-          const hasPage = typeof item.page === 'number'
+          const unreliable = item.unreliable === true
+          const hasPage = typeof item.page === 'number' && !unreliable
           const hasChapter = typeof item.chapter === 'number'
           const hasTarget = hasPage || hasChapter || Boolean(item.externalUrl)
           return (
@@ -49,11 +53,11 @@ export function Outline({ t, model, tab, location, onJump, onOpenExternal }) {
               key={`outline-${index}`}
               ref={active ? activeRef : null}
               type="button"
-              className={`omr-outline-item${hasTarget ? '' : ' omr-outline-item--untargeted'}`}
+              className={`omr-outline-item${hasTarget ? '' : ' omr-outline-item--untargeted'}${unreliable ? ' omr-outline-item--unreliable' : ''}`}
               data-level={level}
               aria-current={active ? 'location' : undefined}
               aria-disabled={hasTarget ? undefined : true}
-              title={item.label}
+              title={unreliable ? `${item.label} · ${t('outline.unreliableTitle')}` : item.label}
               onClick={() => {
                 if (!hasTarget) return
                 if (item.externalUrl) {
