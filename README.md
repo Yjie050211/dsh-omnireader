@@ -173,12 +173,18 @@ reports structured diagnostics to `/api/omnireader/diag`, which were read back f
 - corrupt EPUB/MOBI and an unsupported `.txt` each produce a specific error state
   instead of crashing;
 - theme switching (dark) and font-size changes apply, and the panel stays mounted across
-  a DSH panel switch.
+  a DSH panel switch;
+- Plugin Manager disable → enable cycles apply without activation errors (the client UI
+  half stays mounted in the running page until it reloads, which is standard Harness
+  behaviour; the Host route generation is replaced on restart).
 
 ## Limitations (honest list)
 
 - **Immutable Host code until restart.** The Host half is loaded when the plugin is
   installed; edits to `index.js` require a DSH restart. (The client bundle hot-reloads.)
+  The same rule means a Host generation loaded before an update keeps its HTTP routes for
+  the rest of that session; route registration is fiber-owned and tolerates such a
+  leftover route, so enable/disable stays healthy until the restart.
 - **DOCX is reflow-only.** The exact paginated layout is available through Harness'
   built-in DOCX→PDF preview; OmniReader's own DOCX mode is a clean reading flow
   (headings, tables, images, links). LibreOffice/Word files with complex section
