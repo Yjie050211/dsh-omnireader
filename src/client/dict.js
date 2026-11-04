@@ -107,6 +107,7 @@ export const en = {
   'panel.connected': 'Host connected',
   'panel.disconnected': 'Host offline',
   'panel.library': 'Open document',
+  'panel.back': 'Back to conversation',
 
   'error.kindUnsupported': 'Unsupported format: {format}',
   'error.readFailed': 'Reading the file failed: {message}',
@@ -221,6 +222,7 @@ export const zh = {
   'panel.connected': '已连接宿主',
   'panel.disconnected': '宿主离线',
   'panel.library': '打开文档',
+  'panel.back': '返回对话',
 
   'error.kindUnsupported': '不支持的格式：{format}',
   'error.readFailed': '读取文件失败：{message}',

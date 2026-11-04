@@ -10,6 +10,7 @@ import { Outline } from './Outline.jsx'
 import { SearchPanel } from './SearchPanel.jsx'
 import { NotesPanel } from './NotesPanel.jsx'
 import { Library } from './Library.jsx'
+import { Glyph } from './icons.jsx'
 
 const THEMES = ['auto', 'light', 'sepia', 'dark']
 const FONT_STEPS = [80, 90, 100, 110, 125, 140, 160]
@@ -20,6 +21,7 @@ const THEME_KEYS = {
   sepia: 'toolbar.themeSepia',
   dark: 'toolbar.themeDark',
 }
+const THEME_ICONS = { auto: 'auto', light: 'sun', sepia: 'sun', dark: 'moon' }
 
 function isWebUrl(href) {
   return typeof href === 'string' && /^(https?:|mailto:)/i.test(href)
@@ -58,12 +60,12 @@ function StatusBar({ t, tab, snapshot, progress, model }) {
       {locationText ? <span className="omr-footer__item">{locationText}</span> : null}
       <span className="omr-footer__item omr-footer__progress" title={t('status.progress', { percent })}>
         <span className="omr-progress">
-          <span className="omr-progress__fill" style={{ width: `${Math.max(percent, 1)}%` }} />
+          <span style={{ width: `${Math.max(percent, 1)}%` }} />
         </span>
         {percent}%
       </span>
       {tab.sourceChanged ? <span className="omr-footer__item omr-footer__warn">{t('reader.changed')}</span> : null}
-      <span className="omr-footer__item omr-footer__spacer" />
+      <span className="omr-footer__spacer" />
       <span className="omr-footer__item" data-host={snapshot.host.status}>
         {snapshot.host.status === 'online' ? t('panel.connected') : snapshot.host.status === 'offline' ? t('panel.disconnected') : '…'}
       </span>
@@ -89,12 +91,13 @@ function ErrorState({ t, tab, failure, onRetry, onOpenLibrary }) {
   )
 }
 
-export function ReaderPanel({ t }) {
+export function ReaderPanel({ t, onLeave }) {
   const snapshot = useSyncExternalStore(readerStore.subscribe, readerStore.getSnapshot, readerStore.getSnapshot)
   const [showLibrary, setShowLibrary] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
   const rootRef = useRef(null)
+  const hasTabs = snapshot.tabs.length > 0
 
   useEffect(() => {
     readerStore.init().catch(() => {})
@@ -205,6 +208,10 @@ export function ReaderPanel({ t }) {
     }
   }, [])
 
+  const leave = useCallback(() => {
+    if (typeof onLeave === 'function') onLeave()
+  }, [onLeave])
+
   useEffect(() => {
     const onKeyDown = (event) => {
       const mod = event.ctrlKey || event.metaKey
@@ -212,7 +219,7 @@ export function ReaderPanel({ t }) {
         if (searchOpen) {
           setSearchOpen(false)
           event.preventDefault()
-        } else if (showLibrary) {
+        } else if (showLibrary && hasTabs) {
           setShowLibrary(false)
           event.preventDefault()
         }
@@ -238,10 +245,11 @@ export function ReaderPanel({ t }) {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [capability.search, isPdf, model, searchOpen, setFontSize, setPdfZoom, showLibrary])
+  }, [capability.search, hasTabs, isPdf, model, searchOpen, setFontSize, setPdfZoom, showLibrary])
 
-  const frame = snapshot.tabs.length > 0 && (showLibrary || activeTab !== null)
+  const frame = hasTabs && (showLibrary || activeTab !== null)
   const showReader = frame && !showLibrary && activeTab !== null && activeTab.status === 'ready'
+  const showLibrarySurface = showLibrary || !hasTabs
 
   return (
     <div
@@ -252,112 +260,183 @@ export function ReaderPanel({ t }) {
     >
       <style>{CSS}</style>
       <header className="omr-header">
+        <button
+          type="button"
+          className="omr-btn omr-btn--icon"
+          onClick={leave}
+          title={t('panel.back')}
+          aria-label={t('panel.back')}
+        >
+          <Glyph name="back" />
+        </button>
         <div className="omr-header__title">
           <span className="omr-title-text">OmniReader</span>
           {activeTab !== null ? (
-            <span className="omr-title-sub" title={activeTab.path ?? ''}>
-              {activeTab.title}
-              <span className="omr-title-path">{abbreviation(activeTab.path ?? '', 64)}</span>
+            <span className="omr-title-sub">
+              <span className="omr-title-name" title={activeTab.title}>
+                {activeTab.title}
+              </span>
+              <span className="omr-title-path" title={activeTab.path ?? ''}>
+                {abbreviation(activeTab.path ?? '', 64)}
+              </span>
             </span>
           ) : (
-            <span className="omr-title-sub">{t('panel.subtitle')}</span>
+            <span className="omr-title-sub">
+              <span className="omr-title-name">{t('panel.subtitle')}</span>
+            </span>
           )}
         </div>
         <div className="omr-header__actions">
           <button
             type="button"
-            className="omr-btn"
-            aria-pressed={showLibrary}
+            className="omr-btn omr-btn--icon"
+            aria-pressed={showLibrarySurface}
+            aria-label={t('library.title')}
             title={t('library.title')}
             onClick={() => setShowLibrary((current) => !current)}
           >
-            {t('library.title')}
+            <Glyph name="library" />
           </button>
           <button
             type="button"
-            className="omr-btn"
+            className="omr-btn omr-btn--icon"
             aria-pressed={searchOpen}
+            aria-label={t('toolbar.search')}
             disabled={!showReader || capability.search === false}
             title={t('toolbar.search')}
             onClick={() => setSearchOpen((current) => !current)}
           >
-            ⌕
+            <Glyph name="search" />
           </button>
           <button
             type="button"
-            className="omr-btn"
+            className="omr-btn omr-btn--icon"
             aria-pressed={prefs.showOutline}
+            aria-label={t('toolbar.outline')}
             disabled={!showReader}
             title={t('toolbar.outline')}
             onClick={() => readerStore.setPrefs({ showOutline: !prefs.showOutline })}
           >
-            ☰
+            <Glyph name="outline" />
           </button>
           <button
             type="button"
-            className="omr-btn"
+            className="omr-btn omr-btn--icon"
             aria-pressed={prefs.showNotes}
+            aria-label={t('toolbar.notes')}
             disabled={!showReader}
             title={t('toolbar.notes')}
             onClick={() => readerStore.setPrefs({ showNotes: !prefs.showNotes })}
           >
-            ✎
+            <Glyph name="notes" />
           </button>
-          <button type="button" className="omr-btn" title={t(THEME_KEYS[theme] ?? 'toolbar.theme')} onClick={cycleTheme}>
-            {t(THEME_KEYS[theme] ?? 'toolbar.theme')}
+          <button
+            type="button"
+            className="omr-btn omr-btn--icon"
+            aria-label={t(THEME_KEYS[theme] ?? 'toolbar.theme')}
+            title={t(THEME_KEYS[theme] ?? 'toolbar.theme')}
+            onClick={cycleTheme}
+          >
+            <Glyph name={THEME_ICONS[theme] ?? 'auto'} />
           </button>
           {showReader && !isPdf ? (
             <>
-              <button type="button" className="omr-btn" title={t('toolbar.fontSmaller')} onClick={() => setFontSize(-1)}>
+              <button
+                type="button"
+                className="omr-btn"
+                aria-label={t('toolbar.fontSmaller')}
+                title={t('toolbar.fontSmaller')}
+                onClick={() => setFontSize(-1)}
+              >
                 A−
               </button>
-              <button type="button" className="omr-btn" title={t('toolbar.fontLarger')} onClick={() => setFontSize(1)}>
+              <button
+                type="button"
+                className="omr-btn"
+                aria-label={t('toolbar.fontLarger')}
+                title={t('toolbar.fontLarger')}
+                onClick={() => setFontSize(1)}
+              >
                 A+
               </button>
             </>
           ) : null}
           {showReader && isPdf ? (
             <>
-              <button type="button" className="omr-btn" title={t('toolbar.zoomOut')} onClick={() => setPdfZoom(-1)}>
+              <button
+                type="button"
+                className="omr-btn"
+                aria-label={t('toolbar.zoomOut')}
+                title={t('toolbar.zoomOut')}
+                onClick={() => setPdfZoom(-1)}
+              >
                 −
-              </button>
-              <button type="button" className="omr-btn" title={t('toolbar.zoomIn')} onClick={() => setPdfZoom(1)}>
-                +
               </button>
               <button
                 type="button"
                 className="omr-btn"
+                aria-label={t('toolbar.zoomIn')}
+                title={t('toolbar.zoomIn')}
+                onClick={() => setPdfZoom(1)}
+              >
+                +
+              </button>
+              <button
+                type="button"
+                className="omr-btn omr-btn--icon"
                 aria-pressed={(Number(activeTab.location?.scale) || 0) === 0}
+                aria-label={t('toolbar.fitWidth')}
                 title={t('toolbar.fitWidth')}
                 onClick={() => readerStore.setLocation(activeTab.id, { ...activeTab.location, scale: 0 })}
               >
-                ↔
+                <Glyph name="fit" />
               </button>
-              <button type="button" className="omr-btn" title={t('toolbar.rotate')} onClick={rotate}>
-                ⟳
+              <button
+                type="button"
+                className="omr-btn omr-btn--icon"
+                aria-label={t('toolbar.rotate')}
+                title={t('toolbar.rotate')}
+                onClick={rotate}
+              >
+                <Glyph name="rotate" />
               </button>
             </>
           ) : null}
-          <button type="button" className="omr-btn" aria-pressed={fullscreen} title={t('toolbar.fullscreen')} onClick={toggleFullscreen}>
-            ⛶
+          <button
+            type="button"
+            className="omr-btn omr-btn--icon"
+            aria-pressed={fullscreen}
+            aria-label={t('toolbar.fullscreen')}
+            title={t('toolbar.fullscreen')}
+            onClick={toggleFullscreen}
+          >
+            <Glyph name="fullscreen" />
           </button>
         </div>
       </header>
 
-      {snapshot.tabs.length > 0 ? (
+      {hasTabs ? (
         <div className="omr-tabs" role="tablist" aria-label={t('toolbar.tabs')}>
           {snapshot.tabs.map((tab) => (
             <div key={tab.id} className="omr-tab" data-active={tab.id === snapshot.activeTabId ? 'true' : undefined}>
-              <button type="button" className="omr-tab__label" role="tab" title={tab.path} onClick={() => readerStore.activateTab(tab.id)}>
+              <button
+                type="button"
+                className="omr-tab__label"
+                role="tab"
+                aria-selected={tab.id === snapshot.activeTabId}
+                title={tab.path}
+                onClick={() => readerStore.activateTab(tab.id)}
+              >
                 {tab.title}
               </button>
               <button
                 type="button"
                 className="omr-tab-close"
                 title={t('toolbar.close')}
+                aria-label={t('toolbar.close')}
                 onClick={() => readerStore.closeTab(tab.id)}
               >
-                ×
+                <Glyph name="close" size={12} />
               </button>
             </div>
           ))}
@@ -370,7 +449,7 @@ export function ReaderPanel({ t }) {
             <span className="omr-spinner" />
             <p>{t('reader.loading')}</p>
           </div>
-        ) : showLibrary || snapshot.tabs.length === 0 ? (
+        ) : showLibrarySurface ? (
           <Library t={t} snapshot={snapshot} onOpen={openPath} />
         ) : activeTab === null ? (
           <div className="omr-center">
@@ -431,12 +510,12 @@ export function ReaderPanel({ t }) {
         )}
       </div>
 
-      {activeTab !== null && !showLibrary ? (
+      {activeTab !== null && !showLibrarySurface ? (
         <StatusBar t={t} tab={activeTab} snapshot={snapshot} progress={progress} model={model} />
       ) : (
         <footer className="omr-footer">
           <span className="omr-footer__item">{t('status.ready')}</span>
-          <span className="omr-footer__item omr-footer__spacer" />
+          <span className="omr-footer__spacer" />
           <span className="omr-footer__item" data-host={snapshot.host.status}>
             {snapshot.host.status === 'online' ? t('panel.connected') : snapshot.host.status === 'offline' ? t('panel.disconnected') : '…'}
           </span>
