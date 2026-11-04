@@ -222,11 +222,34 @@ function leavePanel() {
   report('layout-unavailable', { where: 'leave' })
 }
 
+/**
+ * Opens the DSH folder chooser (the OS dialog on a local desktop) and returns
+ * the picked absolute directory, or `null` when the user cancels. The service
+ * may only appear after this plugin's apply, so it is resolved at click time.
+ */
+async function browseDirectory() {
+  const uiWorkspace = services?.uiWorkspace
+  if (uiWorkspace === undefined || uiWorkspace === null || typeof uiWorkspace.pickDirectory !== 'function') {
+    report('picker-unavailable', {})
+    throw new Error('picker-unavailable')
+  }
+  report('picker-open', {})
+  try {
+    const picked = await uiWorkspace.pickDirectory()
+    const path = typeof picked === 'string' && picked.length > 0 ? picked : null
+    report('picker-result', { picked: path })
+    return path
+  } catch (error) {
+    report('picker-failed', { message: String(error?.message ?? error) })
+    throw error
+  }
+}
+
 /** Panel body: supplies locale-bound copy whether or not the slot binds `t`. */
 function ReaderPanelEntry(props) {
   const bound = typeof props?.t === 'function' ? props.t : services?.t
   const translate = typeof bound === 'function' ? bound : (key) => key
-  return <ReaderPanel t={translate} onLeave={leavePanel} />
+  return <ReaderPanel t={translate} onLeave={leavePanel} onBrowse={browseDirectory} />
 }
 
 /**
@@ -278,11 +301,60 @@ export function apply(ctx) {
     get previews() {
       return ctx.get('documentPreviews')
     },
+    get uiWorkspace() {
+      return ctx.get('uiWorkspace')
+    },
     t,
   }
   ctx.effect(() => () => {
     services = null
   })
+
+  // A throttled measurement run can freeze before its cleanup restores the
+  // shell theme. Heal that on the next apply, and always report what the shell
+  // currently uses so a theme trap is visible in the diagnostics.
+  let shellTheme = null
+  try {
+    const themeService = ctx.get('theme')
+    shellTheme = themeService?.getTheme?.()?.id ?? null
+    if (globalThis.__omrAuditArmed === true && themeService !== undefined && themeService !== null) {
+      themeService.setTheme?.('light')
+      globalThis.__omrAuditArmed = false
+      report('audit-theme-restored', {})
+      shellTheme = themeService?.getTheme?.()?.id ?? 'light'
+    }
+  } catch {
+    shellTheme = null
+  }
+
+  // Deferred heal: at apply time the theme service may not exist yet, so a
+  // frozen measurement run is healed as soon as the service becomes available.
+  if (globalThis.__omrAuditArmed === true) {
+    ctx.effect(() => {
+      let attempts = 0
+      const timer = setInterval(() => {
+        attempts += 1
+        const themeService = ctx.get('theme')
+        if (themeService !== undefined && themeService !== null) {
+          let restored = false
+          try {
+            themeService.setTheme('light')
+            restored = true
+          } catch {
+            restored = false
+          }
+          if (restored) {
+            globalThis.__omrAuditArmed = false
+            report('audit-theme-restored', { afterAttempts: attempts })
+          }
+          clearInterval(timer)
+          return
+        }
+        if (attempts >= 40) clearInterval(timer)
+      }, 250)
+      return () => clearInterval(timer)
+    })
+  }
 
   report('apply', {
     hasSlots: typeof ctx.slots?.register === 'function',
@@ -290,6 +362,7 @@ export function apply(ctx) {
     hasLayout: ctx.get('layout') !== undefined && ctx.get('layout') !== null,
     hasPreviews: ctx.get('documentPreviews') !== undefined && ctx.get('documentPreviews') !== null,
     previewExtensions: PREVIEW_EXTENSIONS,
+    shellTheme,
   })
 
   // Quick preview renderers for ebook containers. At boot the registry plugin

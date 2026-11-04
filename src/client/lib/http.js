@@ -82,6 +82,27 @@ export async function fetchDocumentBytes(path, signal) {
   return new Uint8Array(buffer)
 }
 
+/**
+ * Cheap reachability probe for a directory.
+ *
+ * A HEAD on the file route stats the path without reading it: the host answers
+ * `not-a-file` for a directory it can reach (HTTP 400) and `not-found` for a
+ * path that does not exist or cannot be read (HTTP 404). Used to discover the
+ * volumes offered by the file picker without listing them.
+ */
+export async function probeDirectory(path, signal) {
+  try {
+    const response = await fetch(apiUrl('file', { path }), {
+      method: 'HEAD',
+      cache: 'no-store',
+      signal,
+    })
+    return response.status === 400 || response.status === 200
+  } catch {
+    return false
+  }
+}
+
 /** Best-effort diagnostics; never throws into a render pass. */
 /** Serialized so concurrent diagnostics never interleave on the host file. */
 let diagQueue = Promise.resolve()

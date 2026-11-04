@@ -81,3 +81,31 @@ export function abbreviation(text, length = 60) {
   const flat = text.replace(/\s+/g, ' ').trim()
   return flat.length <= length ? flat : `${flat.slice(0, length - 1)}…`
 }
+
+/**
+ * Breaks an absolute path into clickable segments. Windows volumes render as a
+ * single segment (`D:`); POSIX paths start at `/`. Segments carry the absolute
+ * path they address so the picker can jump without re-deriving it.
+ */
+export function pathBreadcrumbs(path) {
+  const value = String(path ?? '')
+  if (value.length === 0) return []
+  if (/^[A-Za-z]:[\\/]/u.test(value)) {
+    const normalized = value.replace(/\//gu, '\\')
+    const root = normalized.slice(0, 2).toUpperCase() + normalized.slice(2, 3)
+    const crumbs = [{ label: normalized.slice(0, 2).toUpperCase(), path: root }]
+    let current = root
+    for (const name of normalized.slice(3).split('\\').filter(Boolean)) {
+      current = current.endsWith('\\') ? `${current}${name}` : `${current}\\${name}`
+      crumbs.push({ label: name, path: current })
+    }
+    return crumbs
+  }
+  const crumbs = [{ label: '/', path: '/' }]
+  let current = ''
+  for (const name of value.split('/').filter(Boolean)) {
+    current = `${current}/${name}`
+    crumbs.push({ label: name, path: current })
+  }
+  return crumbs
+}

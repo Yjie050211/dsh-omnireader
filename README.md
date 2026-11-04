@@ -34,6 +34,23 @@ an **Open in OmniReader** button to the preview header. The built-in Markdown, P
 DOCX, XLSX, image and HTML previews are left untouched — OmniReader never replaces an
 existing renderer, so disabling the plugin restores the original behaviour exactly.
 
+### Choosing files
+
+The library is a real file picker, not a fixed list of C-drive paths:
+
+- **This computer** lists every mounted volume (`C:`, `D:`, `E:`, `F:` …). Volumes are
+  discovered from the client by probing their roots and shown as soon as they answer,
+  so documents on other drives are one click away.
+- **Breadcrumbs** under the path box break the current folder into clickable segments,
+  so climbing out of a deep folder never needs the keyboard.
+- **Browse…** opens the Harness native folder chooser (`uiWorkspace.pickDirectory()`).
+  Pick any folder on any drive, including network shares, and the picker lists it
+  immediately. The chooser is folder-level by design: one more click opens the file.
+- The path box stays available for pasting a path, and `Ctrl/Cmd+O` reopens the picker
+  from anywhere in the reader.
+- The picker remembers the last folder you browsed and, when a document is already
+  open, starts in that document's folder.
+
 ### Formats
 
 | format | engine | outline | search | text selection | page jump | progress anchor |

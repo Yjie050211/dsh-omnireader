@@ -195,6 +195,14 @@ export const CSS = `.omr-root {
 .omr-library__main { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; }
 .omr-library__pathbar { display: flex; align-items: center; gap: 6px; flex: none; margin: 0; }
 .omr-library__toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex: none; min-width: 0; }
+.omr-library__crumbs { display: flex; align-items: center; gap: 2px; flex: 1 1 auto; min-width: 0; overflow-x: auto; white-space: nowrap; font-family: var(--omr-mono); font-size: 11px; scrollbar-width: thin; overscroll-behavior-x: contain; }
+.omr-crumb { flex: none; max-width: 220px; overflow: hidden; text-overflow: ellipsis; border: 0; background: transparent; color: var(--omr-fg-tertiary); font: inherit; padding: 3px 5px; border-radius: 4px; cursor: pointer; }
+.omr-crumb:hover { background: var(--omr-hover); color: var(--omr-fg); }
+.omr-crumb:active { background: var(--omr-layer-3); }
+.omr-crumb:focus-visible { outline: 2px solid var(--omr-fg-secondary); outline-offset: 1px; }
+.omr-crumb[aria-current="true"] { color: var(--omr-fg); font-weight: 600; cursor: default; }
+.omr-crumb[aria-current="true"]:hover { background: transparent; }
+.omr-crumb__sep { flex: none; color: var(--omr-fg-tertiary); opacity: .6; }
 .omr-library__cwd { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--omr-mono); font-size: 11px; color: var(--omr-fg-tertiary); }
 .omr-library__list { list-style: none; margin: 0; padding: 0; flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; }
 .omr-library__list > li { display: block; }
@@ -223,6 +231,7 @@ export const CSS = `.omr-root {
 .omr-note textarea { width: 100%; min-height: 64px; resize: vertical; font-size: 12px; line-height: 1.5; padding: 6px 8px; color: var(--omr-fg); background: var(--omr-layer-2); border: 1px solid var(--omr-border-strong); border-radius: var(--omr-radius-sm); outline: none; }
 .omr-note-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .omr-empty { padding: 18px 12px; text-align: center; color: var(--omr-fg-tertiary); font-size: 12px; line-height: 1.6; }
+.omr-empty--tight { padding: 6px 8px; text-align: left; }
 .omr-empty--error { color: var(--dsw-alias-state-warn-label, #b45309); }
 .omr-kbd { display: inline-block; min-width: 16px; padding: 1px 5px; border: 1px solid var(--omr-border-strong); border-radius: 3px; font-family: var(--omr-mono); font-size: 10px; color: var(--omr-fg-secondary); background: var(--omr-layer-2); }
 .omr-hidden { display: none !important; }

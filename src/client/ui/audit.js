@@ -15,6 +15,8 @@
  */
 import { report } from '../lib/http.js'
 import { readerStore } from '../lib/store.js'
+import { discoverDrives } from '../lib/drives.js'
+import { pathBreadcrumbs } from '../lib/util.js'
 
 const PANEL_ID = 'omnireader'
 const READER_FIXTURE = 'F:/vibe-coding/dsh-omnireader/tests/fixtures/note.md'
@@ -271,10 +273,122 @@ function effectiveBackground(element) {
   return getComputedStyle(document.body).backgroundColor
 }
 
+/**
+ * Cross-drive browsing. Clicks a volume that is not C:, then enters its first
+ * directory. This proves the volumes discovered by the client are wired into
+ * the same listing code path as the starting points, which is what the user
+ * asked for: any drive, without typing a path.
+ */
+async function auditCrossDrive(aliveFn) {
+  const result = {
+    clicked: null,
+    path: null,
+    entries: 0,
+    directories: 0,
+    breadcrumbs: 0,
+    navigated: null,
+    navigatedEntries: null,
+    loaded: false,
+    error: null,
+  }
+  const driveRows = Array.from(document.querySelectorAll('.omr-root [data-drive="true"]'))
+  const target =
+    driveRows.find((row) => String(row.textContent ?? '').trim().toUpperCase() !== 'C:') ?? null
+  if (target === null) {
+    result.error = 'no-secondary-drive'
+    return result
+  }
+  result.clicked = String(target.textContent ?? '').trim()
+  target.click()
+  let rows = []
+  for (let attempt = 0; attempt < 45; attempt += 1) {
+    if (!aliveFn()) return result
+    await sleep(120)
+    rows = Array.from(document.querySelectorAll('.omr-root .omr-library__list li > button'))
+    if (rows.length > 0) break
+  }
+  const pathOf = (row) => String(row.getAttribute('title') ?? '')
+  const looksLikeDirectory = (value) => !/[.][A-Za-z0-9]{1,8}$/u.test(value)
+  result.entries = rows.length
+  result.directories = rows.filter((row) => looksLikeDirectory(pathOf(row))).length
+  const crumbs = () => Array.from(document.querySelectorAll('.omr-root .omr-crumb'))
+  result.breadcrumbs = crumbs().length
+  result.path = result.breadcrumbs > 0 ? String(crumbs()[result.breadcrumbs - 1].getAttribute('title') ?? '') : null
+  const firstDirectory = rows.find((row) => looksLikeDirectory(pathOf(row)))
+  if (firstDirectory === undefined) {
+    result.error = 'no-directory-at-volume-root'
+    return result
+  }
+  firstDirectory.click()
+  for (let attempt = 0; attempt < 45; attempt += 1) {
+    if (!aliveFn()) return result
+    await sleep(120)
+    const current = crumbs()
+    if (current.length > result.breadcrumbs) {
+      result.navigated = String(current[current.length - 1].getAttribute('title') ?? '')
+      for (let settle = 0; settle < 20; settle += 1) {
+        if (!aliveFn()) return result
+        await sleep(120)
+        const rowsInside = document.querySelectorAll('.omr-root .omr-library__list li > button').length
+        const emptyState = document.querySelector('.omr-root .omr-library__main .omr-empty')
+        if (rowsInside > 0 || emptyState !== null) {
+          result.navigatedEntries = rowsInside
+          result.loaded = rowsInside > 0
+          break
+        }
+      }
+      break
+    }
+    if (document.querySelector('.omr-root .omr-empty--error') !== null) {
+      result.error = 'navigate-failed'
+      break
+    }
+  }
+  return result
+}
+
+/**
+ * Measures the file picker: whether the DSH folder chooser is reachable, which
+ * volumes the client discovered, and whether the picker rendered them.
+ */
+function measurePicker(ctx, discovered) {
+  const root = document.querySelector('.omr-root')
+  const uiWorkspace = ctx.get('uiWorkspace')
+  const driveRows =
+    root === null
+      ? []
+      : Array.from(root.querySelectorAll('[data-drive="true"]')).map((node) => ({
+          label: String(node.textContent ?? '').trim(),
+          path: node.getAttribute('title'),
+        }))
+  const pathbarButtons =
+    root === null
+      ? []
+      : Array.from(root.querySelectorAll('.omr-library__pathbar button')).map((node) =>
+          String(node.textContent ?? '').trim(),
+        )
+  return {
+    uiWorkspace: uiWorkspace !== undefined && uiWorkspace !== null,
+    pickDirectory: typeof uiWorkspace?.pickDirectory === 'function',
+    discovered: Array.isArray(discovered) ? discovered.map((drive) => drive.path) : null,
+    renderedDrives: driveRows,
+    breadcrumbs: pathBreadcrumbs('F:/vibe-coding/dsh-omnireader/src'),
+    breadcrumbButtons: root === null ? 0 : root.querySelectorAll('.omr-crumb').length,
+    pathbarButtons,
+    browseEnabled:
+      root === null
+        ? null
+        : Array.from(root.querySelectorAll('.omr-library__pathbar button')).some(
+            (node) => node.disabled === false && /Browse|浏览/.test(String(node.textContent ?? '')),
+          ),
+  }
+}
+
 const SAMPLE_SELECTORS = [
   '.omr-title-text',
   '.omr-title-path',
   '.omr-row__name',
+  '.omr-crumb',
   '.omr-library__cwd',
   '.omr-flow h1',
   '.omr-flow p',
@@ -365,6 +479,9 @@ export function installAudit(ctx, token) {
   let cancelled = false
   const alive = () => globalThis.__omrAuditGen === gen && !cancelled
   const send = (event, detail = {}) => report(event, { runId: token, ...detail })
+  // Marker for the next normal apply: if this run freezes while the shell is
+  // on a test theme, the following build restores it instead of trapping it.
+  globalThis.__omrAuditArmed = true
   send('audit-install', { href: String(globalThis.location?.href ?? '') })
 
   ;(async () => {
@@ -400,6 +517,22 @@ export function installAudit(ctx, token) {
       await sleep(1600)
       if (!alive()) return
       send('audit-panel', measurePanel())
+      // File picker: volumes, breadcrumb segmentation and folder-chooser
+      // availability. The chooser itself is never opened here; that would put
+      // a native dialog on the host display during a measurement run.
+      let discoveredDrives = null
+      try {
+        discoveredDrives = await discoverDrives()
+      } catch {
+        discoveredDrives = null
+      }
+      for (let attempt = 0; attempt < 24; attempt += 1) {
+        if (!alive()) return
+        if (document.querySelector('.omr-root [data-drive="true"]') !== null) break
+        await sleep(150)
+      }
+      send('audit-picker', measurePicker(ctx, discoveredDrives))
+      send('audit-browse', await auditCrossDrive(alive))
       await readerStore.init().catch(() => {})
       if (!alive()) return
       try {
@@ -464,6 +597,7 @@ export function installAudit(ctx, token) {
           } finally {
             try {
               themeService.setTheme('light')
+              if (globalThis.__omrAuditGen === gen) globalThis.__omrAuditArmed = false
             } catch {
               // The shell theme is cosmetic; never let the audit trap it.
             }
@@ -499,6 +633,7 @@ export function installAudit(ctx, token) {
         send('audit-restore-failed', { message: String(error?.message ?? error) })
       }
       await sleep(400)
+      if (globalThis.__omrAuditGen === gen) globalThis.__omrAuditArmed = false
       if (!alive()) return
       send('audit-done', { ok: true })
     } catch (error) {

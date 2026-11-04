@@ -35,6 +35,7 @@ const PATHS = {
   chevron: ['M6.2 3.8 10.4 8l-4.2 4.2'],
   file: ['M4 2.6h5.2l2.8 2.8v8H4z', 'M9.2 2.6v2.8h2.8'],
   folder: ['M2.6 4.2h4.1l1.1 1.5h5.6v6.1H2.6z'],
+  drive: ['M2.4 5.6h11.2v4.8H2.4z', 'M4.2 8h.01', 'M6.6 8h3.4'],
 }
 
 export function Glyph({ name, size = 16 }) {

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { readerStore } from '../lib/store.js'
-import { abbreviation } from '../lib/util.js'
+import { abbreviation, dirname } from '../lib/util.js'
 import { report } from '../lib/http.js'
 import { FORMAT_LABELS } from '../formats/index.js'
 import { CSS } from './styles.js'
@@ -91,7 +91,7 @@ function ErrorState({ t, tab, failure, onRetry, onOpenLibrary }) {
   )
 }
 
-export function ReaderPanel({ t, onLeave }) {
+export function ReaderPanel({ t, onLeave, onBrowse }) {
   const snapshot = useSyncExternalStore(readerStore.subscribe, readerStore.getSnapshot, readerStore.getSnapshot)
   const [showLibrary, setShowLibrary] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -450,7 +450,13 @@ export function ReaderPanel({ t, onLeave }) {
             <p>{t('reader.loading')}</p>
           </div>
         ) : showLibrarySurface ? (
-          <Library t={t} snapshot={snapshot} onOpen={openPath} />
+          <Library
+            t={t}
+            snapshot={snapshot}
+            onOpen={openPath}
+            onBrowse={onBrowse}
+            initialPath={activeTab === null ? '' : dirname(activeTab.path)}
+          />
         ) : activeTab === null ? (
           <div className="omr-center">
             <p>{t('reader.empty')}</p>
